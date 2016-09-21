@@ -9,6 +9,7 @@ import java.nio.file.Paths;
 import java.util.*;
 
 import com.amazonaws.auth.BasicAWSCredentials;
+import com.amazonaws.auth.InstanceProfileCredentialsProvider;
 import com.amazonaws.services.devicefarm.model.*;
 
 import hudson.model.Result;
@@ -899,6 +900,7 @@ public class AWSDeviceFarmRecorder extends Recorder {
         public String roleArn;
         public String akid;
         public String skid;
+        public Boolean useInstanceProfileForCredentials;
 
         private List<String> projectsCache = new ArrayList<String>();
         private Map<String, List<String>> poolsCache = new HashMap<String, List<String>>();
@@ -913,7 +915,11 @@ public class AWSDeviceFarmRecorder extends Recorder {
          */
         public AWSDeviceFarm getAWSDeviceFarm() {
             AWSDeviceFarm adf;
-            if (roleArn == null || roleArn.isEmpty()) {
+            if (useInstanceProfileForCredentials) {
+                InstanceProfileCredentialsProvider provider = new InstanceProfileCredentialsProvider();
+                adf = new AWSDeviceFarm(provider.getCredentials());
+            }
+            else if (roleArn == null || roleArn.isEmpty()) {
                 adf = new AWSDeviceFarm(new BasicAWSCredentials(akid, skid));
             } else {
                 adf = new AWSDeviceFarm(roleArn);
@@ -928,23 +934,31 @@ public class AWSDeviceFarmRecorder extends Recorder {
          */
         @SuppressWarnings("unused")
         public FormValidation doCheckRoleArn(@QueryParameter String roleArn) {
-            if ((roleArn == null || roleArn.isEmpty()) && (akid == null || akid.isEmpty() || skid == null || skid.isEmpty())) {
-                return FormValidation.error("Required if AKID/SKID isn't present!");
+            
+            if(useInstanceProfileForCredentials){
+                return FormValidation.ok();
+            }
+            else{
+                if ((roleArn == null || roleArn.isEmpty()) && (akid == null || akid.isEmpty() || skid == null || skid.isEmpty())) {
+                    return FormValidation.error("Required if AKID/SKID isn't present!");
+                }
+
+                boolean isValidArn = false;
+                if (roleArn != null) {
+                    isValidArn = roleArn.matches("^arn:aws:iam:[^:]*:[0-9]{12}:role/.*");
+                }
+
+                if (!isValidArn && (akid == null || akid.isEmpty() || skid == null || skid.isEmpty())){
+                    return FormValidation.error("Doesn't look like a valid IAM Role ARN (e.g. 'arn:aws:iam::123456789012:role/jenkins')!");
+                }
+
+                if (roleArn != null && !roleArn.isEmpty() && akid != null && !akid.isEmpty() && skid != null && !skid.isEmpty()) {
+                    return FormValidation.error("Must specify either IAM Role ARN *OR* AKID/SKID!");
+                }
+                return FormValidation.ok();
             }
 
-            boolean isValidArn = false;
-            if (roleArn != null) {
-                isValidArn = roleArn.matches("^arn:aws:iam:[^:]*:[0-9]{12}:role/.*");
-            }
-
-            if (!isValidArn && (akid == null || akid.isEmpty() || skid == null || skid.isEmpty())){
-                return FormValidation.error("Doesn't look like a valid IAM Role ARN (e.g. 'arn:aws:iam::123456789012:role/jenkins')!");
-            }
-
-            if (roleArn != null && !roleArn.isEmpty() && akid != null && !akid.isEmpty() && skid != null && !skid.isEmpty()) {
-                return FormValidation.error("Must specify either IAM Role ARN *OR* AKID/SKID!");
-            }
-            return FormValidation.ok();
+            
         }
 
         /**
@@ -954,16 +968,22 @@ public class AWSDeviceFarmRecorder extends Recorder {
          */
         @SuppressWarnings("unused")
         public FormValidation doCheckAkid(@QueryParameter String akid) {
-            if ((roleArn == null || roleArn.isEmpty()) && (akid == null || akid.isEmpty())) {
-                return FormValidation.error("Required if IAM Role ARN isn't present!");
+            
+            if(useInstanceProfileForCredentials){
+                return FormValidation.ok();
             }
-            if ((roleArn == null || roleArn.isEmpty()) && (akid.length() != 20)) {
-                return FormValidation.error("AWS AKIDs are 20 characters long.");
+            else{
+                if ((roleArn == null || roleArn.isEmpty()) && (akid == null || akid.isEmpty())) {
+                    return FormValidation.error("Required if IAM Role ARN isn't present!");
+                }
+                if ((roleArn == null || roleArn.isEmpty()) && (akid.length() != 20)) {
+                    return FormValidation.error("AWS AKIDs are 20 characters long.");
+                }
+                if (roleArn != null && !roleArn.isEmpty() && akid != null && !akid.isEmpty() && skid != null && !skid.isEmpty()) {
+                    return FormValidation.error("Must specify either IAM Role ARN *OR* AKID/SKID!");
+                }
+                return FormValidation.ok();
             }
-            if (roleArn != null && !roleArn.isEmpty() && akid != null && !akid.isEmpty() && skid != null && !skid.isEmpty()) {
-                return FormValidation.error("Must specify either IAM Role ARN *OR* AKID/SKID!");
-            }
-            return FormValidation.ok();
         }
 
         /**
@@ -973,16 +993,22 @@ public class AWSDeviceFarmRecorder extends Recorder {
          */
         @SuppressWarnings("unused")
         public FormValidation doCheckSkid(@QueryParameter String skid) {
-            if ((roleArn == null || roleArn.isEmpty()) && (skid == null || skid.isEmpty())) {
-                return FormValidation.error("Required if IAM Role ARN isn't present!");
+            
+            if(useInstanceProfileForCredentials){
+                return FormValidation.ok();
             }
-            if ((roleArn == null || roleArn.isEmpty()) && (skid.length() != 40)) {
-                return FormValidation.error("AWS SKIDs are 40 characters long.");
+            else{
+                if ((roleArn == null || roleArn.isEmpty()) && (skid == null || skid.isEmpty())) {
+                    return FormValidation.error("Required if IAM Role ARN isn't present!");
+                }
+                if ((roleArn == null || roleArn.isEmpty()) && (skid.length() != 40)) {
+                    return FormValidation.error("AWS SKIDs are 40 characters long.");
+                }
+                if (roleArn != null && !roleArn.isEmpty() && akid != null && !akid.isEmpty() && skid != null && !skid.isEmpty()) {
+                    return FormValidation.error("Must specify either IAM Role ARN *OR* AKID/SKID!");
+                }
+                return FormValidation.ok();
             }
-            if (roleArn != null && !roleArn.isEmpty() && akid != null && !akid.isEmpty() && skid != null && !skid.isEmpty()) {
-                return FormValidation.error("Must specify either IAM Role ARN *OR* AKID/SKID!");
-            }
-            return FormValidation.ok();
         }
 
         /**
